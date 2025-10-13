@@ -1,0 +1,2 @@
+# E155 Lab 7
+This repository contains the code and documentation for Lab 7 of the E155 course. This lab focuses on hardware accelerated 128-bit AES encryption using Intel's AES-NI instruction set. It uses both the FPGA and MCU to excecute the AES encryption algorithm. FPGA handles enctryption while the MCU handles keywords, activation, and encryption keys.

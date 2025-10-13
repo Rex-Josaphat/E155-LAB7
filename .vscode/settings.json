@@ -1,0 +1,7 @@
+{
+    "files.associations": {
+        "stm32l432kc_spi.h": "c",
+        "stm32l432kc_rcc.h": "c",
+        "stm32l432xx.h": "c"
+    }
+}
