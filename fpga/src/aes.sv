@@ -83,95 +83,96 @@ module aes_core(input  logic         clk,
                 output logic         done, 
                 output logic [127:0] cyphertext);
 
-  // Internal signals
-  logic [3:0][31:0] w, currKey, nextKey;
-  logic [31:0] rcon;
-  logic [3:0] roundCount, cycleCount;
-  logic [127:0] state; // Holds intermediate state of the data
-  logic [127:0] bfrSub, afterSub, afterShift, afterMix, bfrAdd, afterAdd;
+    // Internal signals
+    logic [3:0][31:0] w, currKey, nextKey;
+    logic [31:0] rcon;
+    logic [3:0] roundCount, cycleCount;
+    logic [127:0] state; // Holds intermediate state of the data
+    logic [127:0] bfrSub, afterSub, afterShift, afterMix, bfrAdd, afterAdd;
 
-  // Data path signals and setup
-  subBytes sub(clk, bfrSub, afterSub);
-  shiftRows shift(afterSub, afterShift);
-  mixcolumns mix(afterShift, afterMix);
-  addRoundKey add(bfrAdd, w, afterAdd);
+    // Data path signals and setup
+    subBytes sub(clk, bfrSub, afterSub);
+    shiftRows shift(afterSub, afterShift);
+    mixcolumns mix(afterShift, afterMix);
+    addRoundKey add(bfrAdd, w, afterAdd);
 
-  getNextKey keyExp(clk, currKey, rcon, nextKey);
+    getNextKey keyExp(clk, currKey, rcon, nextKey);
 
-  always_ff @(posedge clk) begin
-    if (load) begin
-      roundCount <= 0;
-      cycleCount <= 0;
-      done <= 0;
-      
-      w <= {key[127:96], key[95:64], key[63:32], key[31:0]};
-      currKey <= {key[127:96], key[95:64], key[63:32], key[31:0]};
-      
-      bfrAdd <= plaintext;
-
-    end else if (!done) begin
-      // If begining, load key and plaintext
-      if (roundCount == 0) begin
-        if (cycleCount == 3) begin
-          state <= afterAdd;
-        end
-      end
-
-      // Process rounds
-      if ((roundCount > 0) && (roundCount < 10)) begin
-        if (cycleCount == 0) begin
-          w <= nextKey;
-          currKey <= nextKey;
-        end if (cycleCount == 1) begin
-          bfrSub <= state;
-          bfrAdd <= afterMix;
-        end if (cycleCount == 3) begin
-          state <= afterAdd;
-        end
-      end 
-
-      // If it's round 10, we're done. Skip column mixing.
-      if (roundCount == 10) begin
-        if (cycleCount == 0) begin
-          w <= nextKey;
-          currKey <= nextKey;
-        end if (cycleCount == 1) begin
-          bfrSub <= state;
-        end if (cycleCount == 2) begin
-          bfrAdd <= afterShift; // Skip mixcolumns
-        end if (cycleCount == 3) begin
-          cyphertext <= afterAdd;
-          done <= 1;
-        end
-      end
-
-      // Update cycle and round counters
-      if (cycleCount == 3) begin
+    always_ff @(posedge clk) begin
+      if (load) begin
+        roundCount <= 0;
         cycleCount <= 0;
-        if (roundCount < 10) roundCount <= roundCount + 1;
-      end else begin
-        cycleCount <= cycleCount + 1;
+        done <= 0;
+
+        w <= {key[127:96], key[95:64], key[63:32], key[31:0]};
+        currKey <= {key[127:96], key[95:64], key[63:32], key[31:0]};
+
+        bfrAdd <= plaintext;
+
+      end else if (!done) begin
+        // If begining, load key and plaintext
+        if (roundCount == 0) begin
+          if (cycleCount == 3) begin
+            state <= afterAdd;
+          end
+        end
+
+        // Process rounds
+        if ((roundCount > 0) && (roundCount < 10)) begin
+          if (cycleCount == 0) begin
+            w <= nextKey;
+            currKey <= nextKey;
+          end if (cycleCount == 1) begin
+            bfrSub <= state;
+          end if (cycleCount == 2) begin
+            bfrAdd <= afterMix;
+          end if (cycleCount == 3) begin
+            state <= afterAdd; // Next state
+          end
+        end 
+
+        // If it's round 10, we're done. Skip column mixing.
+        if (roundCount == 10) begin
+          if (cycleCount == 0) begin
+            w <= nextKey;
+            currKey <= nextKey;
+          end if (cycleCount == 1) begin
+            bfrSub <= state;
+          end if (cycleCount == 2) begin
+            bfrAdd <= afterShift; // Skip mixcolumns
+          end if (cycleCount == 3) begin
+            cyphertext <= afterAdd;
+            done <= 1;
+          end
+        end
+
+        // Update cycle and round counters
+        if (cycleCount == 3) begin
+          cycleCount <= 0;
+          if (roundCount < 10) roundCount <= roundCount + 1;
+        end else begin
+          cycleCount <= cycleCount + 1;
+        end
       end
     end
-  end
 
-  // rcon lookup values for rounds 1-10    
-  always_comb begin
-    case(roundCount)
-      4'd0 : rcon = 32'h01000000;
-      4'd1 : rcon = 32'h02000000;
-      4'd2 : rcon = 32'h04000000;
-      4'd3 : rcon = 32'h08000000;
-      4'd4 : rcon = 32'h10000000;
-      4'd5 : rcon = 32'h20000000;
-      4'd6 : rcon = 32'h40000000;
-      4'd7 : rcon = 32'h80000000;
-      4'd8 : rcon = 32'h1b000000;
-      4'd9 : rcon = 32'h36000000;
+    // rcon lookup values for rounds 1-10    
+    always_comb begin
+      case(roundCount)
+        4'd0 : rcon = 32'h01000000;
+        4'd1 : rcon = 32'h02000000;
+        4'd2 : rcon = 32'h04000000;
+        4'd3 : rcon = 32'h08000000;
+        4'd4 : rcon = 32'h10000000;
+        4'd5 : rcon = 32'h20000000;
+        4'd6 : rcon = 32'h40000000;
+        4'd7 : rcon = 32'h80000000;
+        4'd8 : rcon = 32'h1b000000;
+        4'd9 : rcon = 32'h36000000;
 
-      default: rcon = 32'h00000000; 
-    endcase
-  end
+        default: rcon = 32'h00000000; 
+      endcase
+    end
 endmodule
 
 /////////////////////////////////////////////
@@ -184,12 +185,12 @@ endmodule
 module sbox(input  logic [7:0] a,
             output logic [7:0] y);
             
-  // sbox implemented as a ROM
-  // This module is combinational and will be inferred using LUTs (logic cells)
-  logic [7:0] sbox[0:255];
+    // sbox implemented as a ROM
+    // This module is combinational and will be inferred using LUTs (logic cells)
+    logic [7:0] sbox[0:255];
 
-  initial   $readmemh("sbox.txt", sbox);
-  assign y = sbox[a];
+    initial   $readmemh("sbox.txt", sbox);
+    assign y = sbox[a];
 endmodule
 
 /////////////////////////////////////////////
@@ -198,21 +199,20 @@ endmodule
 //   Synchronous version which is mapped to embedded block RAMs (EBR)
 //   Section 5.1.1, Figure 7
 /////////////////////////////////////////////
-module sbox_sync(
-	input		logic [7:0] a,
-	input	 	logic 			clk,
-	output 	logic [7:0] y);
+module sbox_sync(input		logic [7:0] a,
+                 input	 	logic clk,
+                 output 	logic [7:0] y);
             
-  // sbox implemented as a ROM
-  // This module is synchronous and will be inferred using BRAMs (Block RAMs)
-  logic [7:0] sbox [0:255];
+    // sbox implemented as a ROM
+    // This module is synchronous and will be inferred using BRAMs (Block RAMs)
+    logic [7:0] sbox [0:255];
 
-  initial   $readmemh("sbox.txt", sbox);
-	
-	// Synchronous version
-	always_ff @(posedge clk) begin
-		y <= sbox[a];
-	end
+    initial   $readmemh("sbox.txt", sbox);
+    
+    	// Synchronous version
+    	always_ff @(posedge clk) begin
+    		y <= sbox[a];
+    	end
 endmodule
 
 /////////////////////////////////////////////
@@ -225,10 +225,10 @@ endmodule
 module mixcolumns(input  logic [127:0] a,
                   output logic [127:0] y);
 
-  mixcolumn mc0(a[127:96], y[127:96]);
-  mixcolumn mc1(a[95:64],  y[95:64]);
-  mixcolumn mc2(a[63:32],  y[63:32]);
-  mixcolumn mc3(a[31:0],   y[31:0]);
+    mixcolumn mc0(a[127:96], y[127:96]);
+    mixcolumn mc1(a[95:64],  y[95:64]);
+    mixcolumn mc2(a[63:32],  y[63:32]);
+    mixcolumn mc3(a[31:0],   y[31:0]);
 endmodule
 
 /////////////////////////////////////////////
