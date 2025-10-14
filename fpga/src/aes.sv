@@ -84,7 +84,7 @@ module aes_core(input  logic         clk,
                 output logic [127:0] cyphertext);
 
     // Internal signals
-    logic [3:0][31:0] w, currKey, nextKey;
+    logic [3:0][31:0] currKey, nextKey, word;
     logic [31:0] rcon;
     logic [3:0] roundCount, cycleCount;
     logic [127:0] state; // Holds intermediate state of the data
@@ -94,7 +94,7 @@ module aes_core(input  logic         clk,
     subBytes sub(clk, bfrSub, afterSub);
     shiftRows shift(afterSub, afterShift);
     mixcolumns mix(afterShift, afterMix);
-    addRoundKey add(bfrAdd, w, afterAdd);
+    addRoundKey add(bfrAdd, word, afterAdd);
 
     getNextKey keyExp(clk, currKey, rcon, nextKey);
 
@@ -104,7 +104,7 @@ module aes_core(input  logic         clk,
         cycleCount <= 0;
         done <= 0;
 
-        w <= {key[127:96], key[95:64], key[63:32], key[31:0]};
+        word <= {key[127:96], key[95:64], key[63:32], key[31:0]};
         currKey <= {key[127:96], key[95:64], key[63:32], key[31:0]};
 
         bfrAdd <= plaintext;
@@ -120,9 +120,9 @@ module aes_core(input  logic         clk,
         // Process rounds
         if ((roundCount > 0) && (roundCount < 10)) begin
           if (cycleCount == 0) begin
-            w <= nextKey;
+            word <= nextKey;
             currKey <= nextKey;
-          end if (cycleCount == 1) begin
+          end if (cycleCount == 1) begin // one-cycle delay for sbox
             bfrSub <= state;
           end if (cycleCount == 2) begin
             bfrAdd <= afterMix;
@@ -134,7 +134,7 @@ module aes_core(input  logic         clk,
         // If it's round 10, we're done. Skip column mixing.
         if (roundCount == 10) begin
           if (cycleCount == 0) begin
-            w <= nextKey;
+            word <= nextKey;
             currKey <= nextKey;
           end if (cycleCount == 1) begin
             bfrSub <= state;
@@ -283,7 +283,8 @@ endmodule
 //////////////////////////////////
 // subBytes
 //  subBytes from lookup table
-//  Section 5.1.1, Figure 7
+//  performs byte substitution on each byte of state (128 bits = 16 substitutions)
+//  Section 5.1.1, Figure 2
 //////////////////////////////////
 
 module subBytes(input logic clk,
@@ -312,7 +313,8 @@ endmodule
 /////////////////////////////////////////////
 // shiftRows
 //   shift rows portion of AES algorithm
-//   Section 5.1.2, Figure 8
+//   move around the bytes in each row to the left following different offsets
+//   Section 5.1.2, Figure 3
 /////////////////////////////////////////////
 
 module shiftRows(input  logic [127:0] a,
@@ -346,7 +348,7 @@ endmodule
 /////////////////////////////////////////////
 // addRoundKey
 //   addRoundKey portion of AES algorithm
-//   Section 5.1.4, Figure 10
+//   Section 5.1.4, Figure 5
 /////////////////////////////////////////////
 
 module addRoundKey(input  logic [127:0] a,
@@ -356,14 +358,13 @@ module addRoundKey(input  logic [127:0] a,
     assign y = a ^ k;
 endmodule
 
-
 /////////////////////////////////////////////
 // getNextKey
 //   Key expansion portion of AES algorithm
 //   Takes previous key and rcon
 //   rotates the previous key and applies sbox to each byte
 //   XOR with rcon and the previous key to get the new key
-//   Section 5.2, Figure 11
+//   Section 5.2, Figure 6
 /////////////////////////////////////////////
 
 module getNextKey(input  logic clk,
