@@ -99,79 +99,79 @@ module aes_core(input  logic         clk,
     getNextKey keyExp(clk, currKey, rcon, nextKey);
 
     always_ff @(posedge clk) begin
-      if (load) begin
-        roundCount <= 0;
-        cycleCount <= 0;
-        done <= 0;
+        if (load) begin
+            roundCount <= 0;
+            cycleCount <= 0;
+            done <= 0;
 
-        word <= {key[127:96], key[95:64], key[63:32], key[31:0]};
-        currKey <= {key[127:96], key[95:64], key[63:32], key[31:0]};
+            word <= {key[127:96], key[95:64], key[63:32], key[31:0]};
+            currKey <= {key[127:96], key[95:64], key[63:32], key[31:0]};
 
-        bfrAdd <= plaintext;
+            bfrAdd <= plaintext;
 
-      end else if (!done) begin
-        // If begining, load key and plaintext
-        if (roundCount == 0) begin
-          if (cycleCount == 3) begin
-            state <= afterAdd;
-          end
+        end else if (!done) begin
+            // If begining, load key and plaintext
+            if (roundCount == 0) begin
+                if (cycleCount == 3) begin
+                  state <= afterAdd;
+                end
+            end
+
+            // Process rounds
+            if ((roundCount > 0) && (roundCount < 10)) begin
+                if (cycleCount == 0) begin
+                  word <= nextKey;
+                  currKey <= nextKey;
+                end if (cycleCount == 1) begin // one-cycle delay for sbox
+                  bfrSub <= state;
+                end if (cycleCount == 2) begin
+                  bfrAdd <= afterMix;
+                end if (cycleCount == 3) begin
+                  state <= afterAdd; // Next state
+                end
+            end 
+
+            // If it's round 10, we're done. Skip column mixing.
+            if (roundCount == 10) begin
+                if (cycleCount == 0) begin
+                    word <= nextKey;
+                    currKey <= nextKey;
+                end if (cycleCount == 1) begin
+                    bfrSub <= state;
+                end if (cycleCount == 2) begin
+                    bfrAdd <= afterShift; // Skip mixcolumns
+                end if (cycleCount == 3) begin
+                    cyphertext <= afterAdd;
+                    done <= 1;
+                end
+            end
+
+            // Update cycle and round counters
+            if (cycleCount == 3) begin
+                cycleCount <= 0;
+                if (roundCount < 10) roundCount <= roundCount + 1;
+            end else begin
+                cycleCount <= cycleCount + 1;
+            end
         end
-
-        // Process rounds
-        if ((roundCount > 0) && (roundCount < 10)) begin
-          if (cycleCount == 0) begin
-            word <= nextKey;
-            currKey <= nextKey;
-          end if (cycleCount == 1) begin // one-cycle delay for sbox
-            bfrSub <= state;
-          end if (cycleCount == 2) begin
-            bfrAdd <= afterMix;
-          end if (cycleCount == 3) begin
-            state <= afterAdd; // Next state
-          end
-        end 
-
-        // If it's round 10, we're done. Skip column mixing.
-        if (roundCount == 10) begin
-          if (cycleCount == 0) begin
-            word <= nextKey;
-            currKey <= nextKey;
-          end if (cycleCount == 1) begin
-            bfrSub <= state;
-          end if (cycleCount == 2) begin
-            bfrAdd <= afterShift; // Skip mixcolumns
-          end if (cycleCount == 3) begin
-            cyphertext <= afterAdd;
-            done <= 1;
-          end
-        end
-
-        // Update cycle and round counters
-        if (cycleCount == 3) begin
-          cycleCount <= 0;
-          if (roundCount < 10) roundCount <= roundCount + 1;
-        end else begin
-          cycleCount <= cycleCount + 1;
-        end
-      end
     end
 
     // rcon lookup values for rounds 1-10    
     always_comb begin
-      case(roundCount)
-        4'd0 : rcon = 32'h01000000;
-        4'd1 : rcon = 32'h02000000;
-        4'd2 : rcon = 32'h04000000;
-        4'd3 : rcon = 32'h08000000;
-        4'd4 : rcon = 32'h10000000;
-        4'd5 : rcon = 32'h20000000;
-        4'd6 : rcon = 32'h40000000;
-        4'd7 : rcon = 32'h80000000;
-        4'd8 : rcon = 32'h1b000000;
-        4'd9 : rcon = 32'h36000000;
+        case(roundCount)
+            4'd0 : rcon = 32'h01000000;
+            4'd1 : rcon = 32'h02000000;
+            4'd2 : rcon = 32'h04000000;
+            4'd3 : rcon = 32'h08000000;
+            4'd4 : rcon = 32'h10000000;
+            4'd5 : rcon = 32'h20000000;
+            4'd6 : rcon = 32'h40000000;
+            4'd7 : rcon = 32'h80000000;
+            4'd8 : rcon = 32'h1b000000;
+            4'd9 : rcon = 32'h36000000;
 
-        default: rcon = 32'h00000000; 
-      endcase
+            default: rcon = 32'h00000000; 
+        endcase
     end
 endmodule
 
@@ -276,9 +276,8 @@ endmodule
 
 
 
+
 ///////////////////////////////////////////// Added Code /////////////////////////////////////////////
-
-
 
 //////////////////////////////////
 // subBytes
@@ -385,7 +384,7 @@ module getNextKey(input  logic clk,
     sbox_sync sb2(t[15:8], clk, s2);
     sbox_sync sb3(t[7:0], clk, s3);
     
-    // generate next words
+    // generate next key
     assign nextKey[0] = currKey[0] ^ ({s0, s1, s2, s3} ^ rcon);
     assign nextKey[1] = currKey[1] ^ nextKey[0];
     assign nextKey[2] = currKey[2] ^ nextKey[1];
