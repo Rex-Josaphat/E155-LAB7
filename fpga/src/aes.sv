@@ -94,7 +94,7 @@ module aes_core(input  logic         clk,
     subBytes sub(clk, bfrSub, afterSub);
     shiftRows shift(afterSub, afterShift);
     mixcolumns mix(afterShift, afterMix);
-    addRoundKey add(bfrAdd, word, afterAdd);
+    addRoundKey add(bfrAdd, {word[3], word[2], word[1], word[0]}, afterAdd);
 
     getNextKey keyExp(clk, currKey, rcon, nextKey);
 
@@ -104,13 +104,13 @@ module aes_core(input  logic         clk,
             cycleCount <= 0;
             done <= 0;
 
+            // If begining, load key and plaintext
             word <= {key[127:96], key[95:64], key[63:32], key[31:0]};
             currKey <= {key[127:96], key[95:64], key[63:32], key[31:0]};
 
             bfrAdd <= plaintext;
 
         end else if (!done) begin
-            // If begining, load key and plaintext
             if (roundCount == 0) begin
                 if (cycleCount == 3) begin
                   state <= afterAdd;
@@ -389,5 +389,4 @@ module getNextKey(input  logic clk,
     assign nextKey[1] = currKey[1] ^ nextKey[0];
     assign nextKey[2] = currKey[2] ^ nextKey[1];
     assign nextKey[3] = currKey[3] ^ nextKey[2];
-
 endmodule
