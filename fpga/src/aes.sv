@@ -86,7 +86,7 @@ module aes_core(input  logic         clk,
                 output logic [127:0] cyphertext);
 
     // Internal signals
-    logic [3:0][31:0] currKey, nextKey, nextKeyReg, word;
+    logic [3:0][31:0] currKey, nextKey, word;
     logic [31:0] rcon, rconReg;
     logic [3:0] roundCount, cycleCount;
     logic [127:0] state; // Holds intermediate state of the data
@@ -96,7 +96,7 @@ module aes_core(input  logic         clk,
     subBytes sub(clk, bfrSub, afterSub);
     shiftRows shift(afterSub, afterShift);
     mixcolumns mix(afterShift, afterMix);
-    addRoundKey add(bfrAdd, {word[3], word[2], word[1], word[0]}, afterAdd);
+    addRoundKey add(bfrAdd, word, afterAdd);
 
     getNextKey keyExp(clk, currKey, rcon, nextKey);
 
@@ -124,31 +124,29 @@ module aes_core(input  logic         clk,
             // Process rounds
             if ((roundCount > 0) && (roundCount < 10)) begin
                 if (cycleCount == 0) begin
-                    rcon <= rconReg;
-                end if (cycleCount == 1) begin // one-cycle delay for sbox
-                    bfrSub <= state;
-                end if (cycleCount == 2) begin
-                    nextKeyReg <= nextKey;
-                    bfrAdd <= afterMix;
-                    word <= nextKeyReg;
-                    currKey <= nextKeyReg;
-                end if (cycleCount == 3) begin
-                    state <= afterAdd; // Next state
+                    word    <= nextKey;
+                    currKey <= nextKey;
+                    rcon    <= rconReg;
+                    bfrSub  <= state;
                 end
-            end 
+                if (cycleCount == 2) begin
+                    bfrAdd  <= afterMix;
+                end
+                if (cycleCount == 3) begin
+                    state   <= afterAdd;
+                end
+            end
 
             // If it's round 10, we're done. Skip column mixing.
             if (roundCount == 10) begin
                 if (cycleCount == 0) begin
-                    rcon <= rconReg;
-                end if (cycleCount == 1) begin
+                    word <= nextKey;
                     bfrSub <= state;
-                end if (cycleCount == 2) begin
-                    nextKeyReg <= nextKey;
-                    bfrAdd <= afterShift;
-                    word <= nextKeyReg;
-                    // currKey <= nextKeyReg;
-                end if (cycleCount == 3) begin
+                end
+                if (cycleCount == 2) begin
+                bfrAdd <= afterShift; // Skip mixcolumns
+                end
+                if (cycleCount == 3) begin
                     cyphertext <= afterAdd;
                     done <= 1;
                 end
