@@ -15,7 +15,9 @@ module aes(input  logic clk,
            output logic done);
                     
     logic [127:0] key, plaintext, cyphertext;
-            
+    // logic clk;
+    // Internal high-speed oscillator to generate slow clock
+    // HSOSC hf_osc (.CLKHFPU(1'b1), .CLKHFEN(1'b1), .CLKHF(clk)); // 48 MHz     
     aes_spi spi(sck, sdi, sdo, done, key, plaintext, cyphertext);   
     aes_core core(clk, load, key, plaintext, done, cyphertext);
 endmodule
@@ -84,8 +86,8 @@ module aes_core(input  logic         clk,
                 output logic [127:0] cyphertext);
 
     // Internal signals
-    logic [3:0][31:0] currKey, nextKey, word;
-    logic [31:0] rcon;
+    logic [3:0][31:0] currKey, nextKey, nextKeyReg, word;
+    logic [31:0] rcon, rconReg;
     logic [3:0] roundCount, cycleCount;
     logic [127:0] state; // Holds intermediate state of the data
     logic [127:0] bfrSub, afterSub, afterShift, afterMix, bfrAdd, afterAdd;
@@ -107,39 +109,45 @@ module aes_core(input  logic         clk,
             // If begining, load key and plaintext
             word <= {key[127:96], key[95:64], key[63:32], key[31:0]};
             currKey <= {key[127:96], key[95:64], key[63:32], key[31:0]};
-
+            
             bfrAdd <= plaintext;
+
+            rcon <= rconReg;
 
         end else if (!done) begin
             if (roundCount == 0) begin
                 if (cycleCount == 3) begin
-                  state <= afterAdd;
+                    state <= afterAdd;
                 end
             end
 
             // Process rounds
             if ((roundCount > 0) && (roundCount < 10)) begin
                 if (cycleCount == 0) begin
-                  word <= nextKey;
-                  currKey <= nextKey;
+                    rcon <= rconReg;
                 end if (cycleCount == 1) begin // one-cycle delay for sbox
-                  bfrSub <= state;
+                    bfrSub <= state;
                 end if (cycleCount == 2) begin
-                  bfrAdd <= afterMix;
+                    nextKeyReg <= nextKey;
+                    bfrAdd <= afterMix;
+                    word <= nextKeyReg;
+                    currKey <= nextKeyReg;
                 end if (cycleCount == 3) begin
-                  state <= afterAdd; // Next state
+                    state <= afterAdd; // Next state
                 end
             end 
 
             // If it's round 10, we're done. Skip column mixing.
             if (roundCount == 10) begin
                 if (cycleCount == 0) begin
-                    word <= nextKey;
-                    currKey <= nextKey;
+                    rcon <= rconReg;
                 end if (cycleCount == 1) begin
                     bfrSub <= state;
                 end if (cycleCount == 2) begin
-                    bfrAdd <= afterShift; // Skip mixcolumns
+                    nextKeyReg <= nextKey;
+                    bfrAdd <= afterShift;
+                    word <= nextKeyReg;
+                    // currKey <= nextKeyReg;
                 end if (cycleCount == 3) begin
                     cyphertext <= afterAdd;
                     done <= 1;
@@ -159,18 +167,18 @@ module aes_core(input  logic         clk,
     // rcon lookup values for rounds 1-10    
     always_comb begin
         case(roundCount)
-            4'd0 : rcon = 32'h01000000;
-            4'd1 : rcon = 32'h02000000;
-            4'd2 : rcon = 32'h04000000;
-            4'd3 : rcon = 32'h08000000;
-            4'd4 : rcon = 32'h10000000;
-            4'd5 : rcon = 32'h20000000;
-            4'd6 : rcon = 32'h40000000;
-            4'd7 : rcon = 32'h80000000;
-            4'd8 : rcon = 32'h1b000000;
-            4'd9 : rcon = 32'h36000000;
+            4'd0 : rconReg = 32'h01000000;
+            4'd1 : rconReg = 32'h02000000;
+            4'd2 : rconReg = 32'h04000000;
+            4'd3 : rconReg = 32'h08000000;
+            4'd4 : rconReg = 32'h10000000;
+            4'd5 : rconReg = 32'h20000000;
+            4'd6 : rconReg = 32'h40000000;
+            4'd7 : rconReg = 32'h80000000;
+            4'd8 : rconReg = 32'h1b000000;
+            4'd9 : rconReg = 32'h36000000;
 
-            default: rcon = 32'h00000000; 
+            default: rconReg = 32'h00000000; 
         endcase
     end
 endmodule
@@ -207,7 +215,7 @@ module sbox_sync(input		logic [7:0] a,
     // This module is synchronous and will be inferred using BRAMs (Block RAMs)
     logic [7:0] sbox [0:255];
 
-    initial   $readmemh("sbox.txt", sbox);
+    initial   $readmemh("D:/MicroPs/E155-Lab7/fpga/src/sbox.txt", sbox);
     
     	// Synchronous version
     	always_ff @(posedge clk) begin
@@ -350,11 +358,15 @@ endmodule
 //   Section 5.1.4, Figure 5
 /////////////////////////////////////////////
 
-module addRoundKey(input  logic [127:0] a,
-                   input  logic [127:0] k,
+module addRoundKey(input  logic [127:0] a, k,
+                //    input  logic [3:0][31:0] k,
                    output logic [127:0] y);
-                   
-    assign y = a ^ k;
+
+    assign y = a ^ k;                   
+    // assign y[127:96] = a[127:96] ^ k[3];
+    // assign y[95:64]  = a[95:64]  ^ k[2];
+    // assign y[63:32]  = a[63:32]  ^ k[1];
+    // assign y[31:0]   = a[31:0]   ^ k[0];
 endmodule
 
 /////////////////////////////////////////////
@@ -376,7 +388,7 @@ module getNextKey(input  logic clk,
     
     // rotate left by 8 bits
     assign {t0, t1, t2, t3} = currKey[0];
-    assign t = {t1, t2, t3, t0};
+    assign t = {t1, t2, t3, t0}; // rotated word
     
     // apply sbox to each byte of t
     sbox_sync sb0(t[31:24], clk, s0);
@@ -385,8 +397,8 @@ module getNextKey(input  logic clk,
     sbox_sync sb3(t[7:0], clk, s3);
     
     // generate next key
-    assign nextKey[0] = currKey[0] ^ ({s0, s1, s2, s3} ^ rcon);
-    assign nextKey[1] = currKey[1] ^ nextKey[0];
-    assign nextKey[2] = currKey[2] ^ nextKey[1];
-    assign nextKey[3] = currKey[3] ^ nextKey[2];
+    assign nextKey[3] = currKey[3] ^ ({s0, s1, s2, s3} ^ rcon);
+    assign nextKey[2] = currKey[2] ^ nextKey[3];
+    assign nextKey[1] = currKey[1] ^ nextKey[2];
+    assign nextKey[0] = currKey[0] ^ nextKey[1];
 endmodule
