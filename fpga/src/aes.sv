@@ -7,18 +7,21 @@
 //   Top level module with SPI interface and SPI core
 /////////////////////////////////////////////
 
-module aes(input  logic clk,
-           input  logic sck, 
+module aes( 
+            // input  logic clk,
+           input  logic sck,
            input  logic sdi,
            output logic sdo,
            input  logic load,
            output logic done);
-                    
+
     logic [127:0] key, plaintext, cyphertext;
-    // logic clk;
+    logic clk;
+
     // Internal high-speed oscillator to generate slow clock
-    // HSOSC hf_osc (.CLKHFPU(1'b1), .CLKHFEN(1'b1), .CLKHF(clk)); // 48 MHz     
-    aes_spi spi(sck, sdi, sdo, done, key, plaintext, cyphertext);   
+    HSOSC hf_osc (.CLKHFPU(1'b1), .CLKHFEN(1'b1), .CLKHF(clk)); // 48 MHz
+    
+    aes_spi spi(sck, sdi, sdo, done, key, plaintext, cyphertext);
     aes_core core(clk, load, key, plaintext, done, cyphertext);
 endmodule
 
@@ -29,7 +32,7 @@ endmodule
 //   Tricky cases to properly change sdo on negedge clk
 /////////////////////////////////////////////
 
-module aes_spi(input  logic sck, 
+module aes_spi(input  logic sck,
                input  logic sdi,
                output logic sdo,
                input  logic done,
@@ -38,7 +41,7 @@ module aes_spi(input  logic sck,
 
     logic         sdodelayed, wasdone;
     logic [127:0] cyphertextcaptured;
-               
+
     // assert load
     // apply 256 sclks to shift in key and plaintext, starting with plaintext[127]
     // then deassert load, wait until done
@@ -47,14 +50,14 @@ module aes_spi(input  logic sck,
     // edge is a rising edge (clock going from low in the idle state to high).
     always_ff @(posedge sck)
         if (!wasdone)  {cyphertextcaptured, plaintext, key} = {cyphertext, plaintext[126:0], key, sdi};
-        else           {cyphertextcaptured, plaintext, key} = {cyphertextcaptured[126:0], plaintext, key, sdi}; 
-    
+        else           {cyphertextcaptured, plaintext, key} = {cyphertextcaptured[126:0], plaintext, key, sdi};
+
     // sdo should change on the negative edge of sck
     always_ff @(negedge sck) begin
         wasdone = done;
         sdodelayed = cyphertextcaptured[126];
     end
-    
+
     // when done is first asserted, shift out msb before clock edge
     assign sdo = (done & !wasdone) ? cyphertext[127] : sdodelayed;
 endmodule
@@ -64,7 +67,7 @@ endmodule
 //   top level AES encryption module
 //   when load is asserted, takes the current key and plaintext
 //   generates cyphertext and asserts done when complete 11 cycles later
-// 
+//
 //   See FIPS-197 with Nk = 4, Nb = 4, Nr = 10
 //
 //   The key and message are 128-bit values packed into an array of 16 bytes as
@@ -78,11 +81,11 @@ endmodule
 //        [127:96]  [95:64] [63:32] [31:0]      w[0]    w[1]    w[2]    w[3]
 /////////////////////////////////////////////
 
-module aes_core(input  logic         clk, 
+module aes_core(input  logic         clk,
                 input  logic         load,
-                input  logic [127:0] key, 
-                input  logic [127:0] plaintext, 
-                output logic         done, 
+                input  logic [127:0] key,
+                input  logic [127:0] plaintext,
+                output logic         done,
                 output logic [127:0] cyphertext);
 
     // Internal signals
@@ -109,7 +112,7 @@ module aes_core(input  logic         clk,
             // If begining, load key and plaintext
             word <= {key[127:96], key[95:64], key[63:32], key[31:0]};
             currKey <= {key[127:96], key[95:64], key[63:32], key[31:0]};
-            
+
             bfrAdd <= plaintext;
 
             rcon <= rconReg;
@@ -162,7 +165,7 @@ module aes_core(input  logic         clk,
         end
     end
 
-    // rcon lookup values for rounds 1-10    
+    // rcon lookup values for rounds 1-10
     always_comb begin
         case(roundCount)
             4'd0 : rconReg = 32'h01000000;
@@ -176,7 +179,7 @@ module aes_core(input  logic         clk,
             4'd8 : rconReg = 32'h1b000000;
             4'd9 : rconReg = 32'h36000000;
 
-            default: rconReg = 32'h00000000; 
+            default: rconReg = 32'h00000000;
         endcase
     end
 endmodule
@@ -190,7 +193,7 @@ endmodule
 
 module sbox(input  logic [7:0] a,
             output logic [7:0] y);
-            
+
     // sbox implemented as a ROM
     // This module is combinational and will be inferred using LUTs (logic cells)
     logic [7:0] sbox[0:255];
@@ -208,13 +211,13 @@ endmodule
 module sbox_sync(input		logic [7:0] a,
                  input	 	logic clk,
                  output 	logic [7:0] y);
-            
+
     // sbox implemented as a ROM
     // This module is synchronous and will be inferred using BRAMs (Block RAMs)
     logic [7:0] sbox [0:255];
 
     initial   $readmemh("D:/MicroPs/E155-Lab7/fpga/src/sbox.txt", sbox);
-    
+
     	// Synchronous version
     	always_ff @(posedge clk) begin
     		y <= sbox[a];
@@ -246,22 +249,22 @@ endmodule
 
 module mixcolumn(input  logic [31:0] a,
                  output logic [31:0] y);
-                      
+
         logic [7:0] a0, a1, a2, a3, y0, y1, y2, y3, t0, t1, t2, t3, tmp;
-        
+
         assign {a0, a1, a2, a3} = a;
         assign tmp = a0 ^ a1 ^ a2 ^ a3;
-    
+
         galoismult gm0(a0^a1, t0);
         galoismult gm1(a1^a2, t1);
         galoismult gm2(a2^a3, t2);
         galoismult gm3(a3^a0, t3);
-        
+
         assign y0 = a0 ^ tmp ^ t0;
         assign y1 = a1 ^ tmp ^ t1;
         assign y2 = a2 ^ tmp ^ t2;
         assign y3 = a3 ^ tmp ^ t3;
-        assign y = {y0, y1, y2, y3};    
+        assign y = {y0, y1, y2, y3};
 endmodule
 
 /////////////////////////////////////////////
@@ -275,7 +278,7 @@ module galoismult(input  logic [7:0] a,
                   output logic [7:0] y);
 
     logic [7:0] ashift;
-    
+
     assign ashift = {a[6:0], 1'b0};
     assign y = a[7] ? (ashift ^ 8'b00011011) : ashift;
 endmodule
@@ -295,7 +298,7 @@ endmodule
 module subBytes(input logic clk,
                 input  logic [127:0] a,
                 output logic [127:0] y);
-                    
+
     sbox_sync sb0(a[127:120], clk, y[127:120]);
     sbox_sync sb1(a[119:112], clk, y[119:112]);
     sbox_sync sb2(a[111:104], clk, y[111:104]);
@@ -324,25 +327,25 @@ endmodule
 
 module shiftRows(input  logic [127:0] a,
                  output logic [127:0] y);
-                 
+
     // row 0 (a0,a4,a8,a12) not shifted
     assign y[127:120] = a[127:120];
     assign y[95:88]   = a[95:88];
     assign y[63:56]   = a[63:56];
     assign y[31:24]   = a[31:24];
-    
+
     // row 1 (a1,a5,a9,a13) shifted left by 1
     assign y[119:112] = a[87:80];
     assign y[87:80]   = a[55:48];
     assign y[55:48]   = a[23:16];
     assign y[23:16]   = a[119:112];
-    
+
     // row 2 (a2,a6,a10,a14) shifted left by 2
     assign y[111:104] = a[47:40];
     assign y[79:72]   = a[15:8];
     assign y[47:40]   = a[111:104];
     assign y[15:8]    = a[79:72];
-    
+
     // row 3 (a3,a7,a11,a15) shifted left by 3
     assign y[103:96]  = a[7:0];
     assign y[71:64]   = a[103:96];
@@ -357,14 +360,9 @@ endmodule
 /////////////////////////////////////////////
 
 module addRoundKey(input  logic [127:0] a, k,
-                //    input  logic [3:0][31:0] k,
                    output logic [127:0] y);
 
-    assign y = a ^ k;                   
-    // assign y[127:96] = a[127:96] ^ k[3];
-    // assign y[95:64]  = a[95:64]  ^ k[2];
-    // assign y[63:32]  = a[63:32]  ^ k[1];
-    // assign y[31:0]   = a[31:0]   ^ k[0];
+    assign y = a ^ k;
 endmodule
 
 /////////////////////////////////////////////
@@ -380,20 +378,20 @@ module getNextKey(input  logic clk,
                   input  logic [3:0][31:0] currKey,
                   input  logic [31:0] rcon,
                   output logic [3:0][31:0] nextKey);
-                    
+
     logic [31:0] t;
     logic [7:0]  t0, t1, t2, t3, s0, s1, s2, s3;
-    
+
     // rotate left by 8 bits
     assign {t0, t1, t2, t3} = currKey[0];
     assign t = {t1, t2, t3, t0}; // rotated word
-    
+
     // apply sbox to each byte of t
     sbox_sync sb0(t[31:24], clk, s0);
     sbox_sync sb1(t[23:16], clk, s1);
     sbox_sync sb2(t[15:8], clk, s2);
     sbox_sync sb3(t[7:0], clk, s3);
-    
+
     // generate next key
     assign nextKey[3] = currKey[3] ^ ({s0, s1, s2, s3} ^ rcon);
     assign nextKey[2] = currKey[2] ^ nextKey[3];
