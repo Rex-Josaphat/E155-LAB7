@@ -17,12 +17,20 @@ module aes(
 
     logic [127:0] key, plaintext, cyphertext;
     logic clk;
+    
+    // Synchronize load signal to the clk instead of sck
+    logic load_meta, load_sync;
+    always_ff @(posedge clk) begin
+        load_meta <= load;
+        load_sync <= load_meta;
+    end
 
     // Internal high-speed oscillator to generate slow clock
     HSOSC hf_osc (.CLKHFPU(1'b1), .CLKHFEN(1'b1), .CLKHF(clk)); // 48 MHz
     
     aes_spi spi(sck, sdi, sdo, done, key, plaintext, cyphertext);
-    aes_core core(clk, load, key, plaintext, done, cyphertext);
+    
+    aes_core core(clk, load_sync, key, plaintext, done, cyphertext);
 endmodule
 
 /////////////////////////////////////////////
