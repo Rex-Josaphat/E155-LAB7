@@ -1,5 +1,4 @@
 `timescale 10ns/1ns
-
 /////////////////////////////////////////////
 // testbench_aes_core
 // Tests AES with cases from FIPS-197 appendix
@@ -7,6 +6,11 @@
 // Added 4/28/21 by Josh Brake
 // jbrake@hmc.edu
 /////////////////////////////////////////////
+
+// Josaphat Ngoga
+// jngoga@g.hmc.edu
+// 10/16/2025
+// Modified from original to test multiple transactions back to back
 
 module testbench_aes_core();
     logic clk, load, done;

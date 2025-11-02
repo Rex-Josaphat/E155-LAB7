@@ -1,4 +1,10 @@
 `timescale 10ns/1ns
+// Josaphat Ngoga
+// jngoga@g.hmc.edu
+// 11/1/2025
+// Modified from original testbench by Josh Brake
+// to test timing of AES module with SPI interface by running two transactions back to back
+
 /////////////////////////////////////////////
 // testbench_aes_spi
 // Tests AES with cases from FIPS-197 appendix
@@ -11,7 +17,8 @@ module testbench_aes_spi();
     logic [255:0] comb;
     logic [8:0] i;
     logic delay;
-    logic pass;
+    logic pass = 1;
+
 
     // device under test
     aes dut(clk, sck, sdi, sdo, load, done);
@@ -30,9 +37,7 @@ module testbench_aes_spi();
 
     // ---------- TEST SEQUENCE ----------
     initial begin
-      pass = 1;
-
-      // ---------------- Test 1 ----------------
+      // Test case from FIPS-197 Appendix A.1, B
       key       = 128'h2B7E151628AED2A6ABF7158809CF4F3C;
       plaintext = 128'h3243F6A8885A308D313198A2E0370734;
       expected  = 128'h3925841D02DC09FBDC118597196A0B32;
@@ -51,7 +56,7 @@ module testbench_aes_spi();
       // small gap before next test
       #100;
 
-      // ---------------- Test 2 ----------------
+      // Alternate test case from Appendix C.1
       key       = 128'h000102030405060708090A0B0C0D0E0F;
       plaintext = 128'h00112233445566778899AABBCCDDEEFF;
       expected  = 128'h69C4E0D86A7B0430D8CDB78070B4C55A;
@@ -67,7 +72,6 @@ module testbench_aes_spi();
         pass = 0;
       end
 
-      // ---------------- Final result ----------------
       if (pass)
         $display("All tests passed");
       else
@@ -76,7 +80,6 @@ module testbench_aes_spi();
       $stop();
     end
 
-    // ---------- SPI driver logic (same as original) ----------
     always @(posedge clk) begin
       if (i == 256) load = 1'b0;
       if (i < 256) begin
@@ -93,7 +96,7 @@ module testbench_aes_spi();
       end
     end
 
-    // dummy task to preserve original structure (no major change)
+    // dummy task to wait for SPI transfer to complete
     task run_spi_transfer;
       begin
         wait(i == 384);

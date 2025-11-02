@@ -1,6 +1,8 @@
 // Josaphat Ngoga
 // jngoga@g.hmc.edu
 // 10/13/2025
+// Modified from original by Josh Brake to implement key expansion and AES core
+// and modules to perform AES transformation steps
 
 /////////////////////////////////////////////
 // aes
