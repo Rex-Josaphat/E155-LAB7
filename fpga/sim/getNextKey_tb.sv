@@ -5,9 +5,9 @@
 `timescale 10ns/1ns
 
 /////////////////////////////////////////////
-// testbench_shiftRows_tb
-// Tests shiftRows module for proper shifting operations.
-// Demonstration follows examples from FIPS-197 appendix A.1
+// testbench_getNextKey_tb
+// Tests the key expansion functionality across all RCON rounds
+// as well as along the full datapath.
 /////////////////////////////////////////////
 
 module getNextKey_tb();
